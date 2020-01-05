@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+    <title></title>
+    <meta name="description" content />
+    <meta name="viewport" content="width=device-width" />
+
+    <!-- Place favicon.ico and apple-touch-icon.png in the root directory-->
+    <link rel="shortcut icon" href="../favicon.ico" />
+
+    <script src="http://code.jquery.com/jquery-2.1.0.min.js"></script>
+
+    <!--
+    if head
+        - var path = current.path.join("/") + "_head"
+        != partial(path, null)
+        -->
+    <link rel="stylesheet" href="../css/normalize.css" />
+    <link rel="stylesheet" href="../css/main.css" />
+    <link rel="stylesheet" href="../css/style.css" />
+    <link rel="stylesheet" href="../css/longform.css" />
+
+    
+
+    <script src="../js/vendor/modernizr-2.6.2.min.js"></script>
+    <script type="text/javascript" , src="//use.typekit.net/ovr5ukj.js"></script>
+    <script type="text/javascript">
+        try{Typekit.load();}catch(e){}
+    </script>
+  </head>
+  <body>
+    <div id="wrapper">
+      <header>
+        <div>
+          <a href="../">Main</a>
+        </div>
+      </header>
+      <section id="main">
+        <div class="contentwrapper">
+          <article>
+    <section class="header">
+        Posted on 10/14/14
+        
+    </section>
+    <section>
+        <p>p While on the road to iOS development with Haskell, I stumbled upon a rather interesting problem. This is its story.</p>
+<p>hr</p>
+<p>p To run Haskell code on your phone, you need to compile it for the architecture that your phone runs on– usually ARM. That’s called cross-compilation, because you do the actual compilation a different machine– perhaps your laptop with an x86 architecture. The upshot of this is that you can’t directly run the code that you’re compiling.</p>
+<p>p Normally this isn’t a problem. Using <a href="https://github.com/ghc-ios/ghc-ios-scripts">ghc-ios</a>, I can build Haskell libraries for ARM, and then run them on the device. Easy peasy. Except for one case.</p>
+<p>pre. Preprocessing library zlib-0.5.4.1… Codec/Compression/Zlib/Stream.hsc:924 directive const_str cannot be handled in cross-compilation mode</p>
+<p>p I need the zlib library to read .pngs, which I need to be able to load .png textures into OpenGL. The zlib package has a .hsc file, which isn’t normal Haskell. It’s a sort of template file, meant to be filled out by the utility ‘hsc2hs’. The point of hsc2hs is to assist in writing code that glues together Haskell and C code. This is often called FFI, or foreign function interface, since C is a foreign language that Haskell may communicate with in a special way.</p>
+<p>p This zlib library is actually a wrapper around a C library, so it needs to use the FFI to turn C functions into Haskell functions. However, sometimes, in order to properly wrap a C function, some information about the C compiler and its environment need to be known. Things like the size or offset of a structure, or the value of a #define constant.</p>
+<p>p hsc2hs provides a way to calculate those things at compile time, instead of having to specify them directly. It’s actually pretty simple. Just compile and run a short C program that calculates the value.</p>
+<p>p But wait! We can’t do that in cross compilation mode. We can’t run ARM code, so we can’t run a program to calculate those values.</p>
+<p>p Here’s where a nifty trick comes in. I’ll let the documentation for hsc2hs speak for itself:</p>
+<p>pre. – Given a compile-time constant with boolean type, this extracts the – value of the constant by compiling a .c file only. – – The trick comes from autoconf: use the fact that the compiler must – perform constant arithmetic for computation of array dimensions, and – will generate an error if the array has negative size. runCompileBooleanTest :: ZCursor Token -&gt; String -&gt; TestMonad Bool</p>
+<p>p And then it tries to compile this sort of program:</p>
+<p>pre. &quot;void _hsc2hs_test() {&quot; ++ &quot; static int test_array[1 - 2 * !(&quot; ++ booleanTest ++ &quot;)];&quot; ++ &quot; test_array[0] = 0;&quot; ++ “}”</p>
+<p>p booleanTest is some expression like ‘value &gt; 42’.</p>
+<p>p So we generate a small program that tries to create an array with a size that’s based in part on the value of a boolean expression, and we compile it. If the size is negative, the compiler will generate an error. Otherwise, it succeeds. Cool! We can figure out the truthiness of a value without ever running the program.</p>
+<p>p Let’s take that a step further. If we want to know value of some number, we can perform a binary search. So, test if it’s less than 2^32. If so, test if it’s less than 2^16. And continue narrowing it down until you’ve found it.</p>
+<p>p So we can calculate the value of a constant on the target platform without ever running code on that platform!</p>
+<p>p This is all very exciting, but let’s get back to that error.</p>
+<p>pre. Preprocessing library zlib-0.5.4.1… Codec/Compression/Zlib/Stream.hsc:924 directive const_str cannot be handled in cross-compilation mode</p>
+<p>p Looking in Stream.hsc we find…</p>
+<p>pre. c_inflateInit2 :: StreamState -&gt; CInt -&gt; IO CInt c_inflateInit2 z n = withCAString &amp;#35{const_str ZLIB_VERSION} $ -&gt; c_inflateInit2_ z n versionStr (&amp;#35{const sizeof(z_stream)} :: CInt)</p>
+<p>p We see hear a couple of directives for hsc2hs to process. Namely, &amp;#35{const_str …} and &amp;#35{const …}. The const one we know is fine. The trouble is const_str. This wrapper code wants to use the ZLIB_VERSION in its processing. But, because it’s a string, hsc2hs says it can’t determine it when doing cross compilation. It doesn’t know how to calculate it using just compiler errors.</p>
+<p>p Well, that doesn’t seem right to me. Since a C string is just an array of chars (which are numbers), we should be able to calculate each value in the array separately and then piece them together. But, we need to know the length of the array, as well as the value of each element in the array.</p>
+<p>p We can calculate the length…</p>
+<p>pre. //test.c #define VAR “HELLO WORLD!” int main() { return VAR[20]; }</p>
+<p>pre. $ clang -Warray-bounds -Werror test.c test.c:4:12: error: array index 20 is past the end of the array (which contains 13 elements) [-Werror,-Warray-bounds] return VAR[20]; ^ ~~ test.c:1:13: note: expanded from macro ‘VAR’ #define VAR “HELLO WORLD!” ^ 1 error generated.</p>
+<p>p If the compiler throws an error when we try to access a value outside the array, then we can calculate the size of the array using the same binary search technique.</p>
+<p>p Note: We <i>could</i> just parse the error message (“which contains 13 elements”), but that will likely be unreliable in the long term, as the exact output of the error message could change. And a flag like -Warray-bounds is more likely to be supported by multiple compilers than for them to have the same error messages.</p>
+<p>p But we still need the value of the array at a particular index. From what I can tell, the C-preprocessor doesn’t provide a way to access an array element, even if the array itself is known at compile time. So, this is where I’m stuck.</p>
+<p>p If any hsc2hs committers read this and wouldn’t mind helping me solve this, I would appreciate it. I also opened a ticket: <a href="https://ghc.haskell.org/trac/ghc/ticket/9689">#9689</a></p>
+<p>h2 ** Update ** p rwbarton supplied a <a href="http://lpaste.net/8287391336118616064">patch </a> for zlib-0.5.4.1 that works around this limitation, and actually uses an entirely better approach than trying to grab the string constant (by importing a macro directly). Calculating a string in the method described above is perhaps impossible, but no actual packages <i>need</i> that feature (as far as I understand) and could just abstact over a C-macro instead. Check out the ticket for more details.</p>
+    </section>
+</article>
+
+        </div>
+      </section>
+      <footer>Copyright Axis Sivitz 2013-2020<footer>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+    <title></title>
+    <meta name="description" content />
+    <meta name="viewport" content="width=device-width" />
+
+    <!-- Place favicon.ico and apple-touch-icon.png in the root directory-->
+    <link rel="shortcut icon" href="../favicon.ico" />
+
+    <script src="http://code.jquery.com/jquery-2.1.0.min.js"></script>
+
+    <!--
+    if head
+        - var path = current.path.join("/") + "_head"
+        != partial(path, null)
+        -->
+    <link rel="stylesheet" href="../css/normalize.css" />
+    <link rel="stylesheet" href="../css/main.css" />
+    <link rel="stylesheet" href="../css/style.css" />
+    <link rel="stylesheet" href="../css/longform.css" />
+
+    
+
+    <script src="../js/vendor/modernizr-2.6.2.min.js"></script>
+    <script type="text/javascript" , src="//use.typekit.net/ovr5ukj.js"></script>
+    <script type="text/javascript">
+        try{Typekit.load();}catch(e){}
+    </script>
+  </head>
+  <body>
+    <div id="wrapper">
+      <header>
+        <div>
+          <a href="../">Main</a>
+        </div>
+      </header>
+      <section id="main">
+        <div class="contentwrapper">
+          <article>
+    <section class="header">
+        Posted on 7/25/14
+        
+    </section>
+    <section>
+        <p>p I recently started learning about the programming language <a href="http://learnyouahaskell.com/chapters">Haskell</a>. I plan to write soon about using it to build a game engine, but before that I want to tackle a neat little feature that’s common in functional languages: <a href="https://en.wikipedia.org/wiki/Option_type">The Option Type</a>. p In Haskell it’s called Maybe. In Scala, ‘Option’. Apple’s new language Swift also has optional types, with a caveat– more on that later. p The central idea is that the possibility of having a Null value should be represented at the <em>type</em> level, not at the runtime level. p In C, C++, Obj-C, Java, and other similar languages, the lack of a value is represented by Null. So if your function takes a Thing, you probably need to check if that Thing is <em>really</em> a Thing, or actually a Null (a Nothing). I say <em>probably</em> because sometimes you can be sure you have a Thing, so you don’t need to double check. And checking for that is annoying, so it’s often left out if possible.</p>
+<p>pre. // Hypothetical greeter function String greet(String name) { if (name == Null) { //Null checking is annoying return “I don’t know who you are!” } else { return “Greetings,” + name } }</p>
+<p>p But sometimes our assumptions are wrong! If we take a function that presumed the value would not be Null, and use it in a new context where the value might actually be Null, we can get a runtime error (hello NullPointerException!). Or maybe we assumed a library function would always return a Thing, but it actually can return a Nothing under certain circumstances. Shame on us for not reading the docs, I suppose. p Dynamic languages like Python, Ruby, Scheme, etc. obviously have no static type checking, so they are prone to the same problems. p The option type solves this problem by requiring us to handle the Nothing case. Here’s a quick Haskell example that turns “Axis” into “Greetings, Axis”.</p>
+<p>p First we declare the type of the function. pre. greet :: Maybe String -&gt; String</p>
+<p>p In Haskell, a <strong>Maybe <em>Thing</em></strong> can either be ‘Nothing’ or ‘Just <em>Thing</em>’. We declare our greet function to be of type <strong>Maybe String -&gt; String</strong> which means it takes a value that <em>might</em> be a String (or might be Nothing), and returns something that is <em>definitely</em> a String.</p>
+<p>p Here’s the definition of greet:</p>
+<p>pre. greet maybe_name = case maybe_name of Nothing -&gt; “I don’t know who you are!” Just name -&gt; “Greetings,” ++ name</p>
+<p>p Because the actual type of the value is a Maybe, in order to get at the Just value we need to use pattern matching. The compiler forces us to confront the possibility of not having a String. Of course, that’s a bit verbose. More idiomatic Haskell would do the pattern matching in the actual function parameters:</p>
+<p>pre. greet Nothing = “I don’t know who you are!” greet (Just name) = “Greetings,” ++ name</p>
+<p>p We can simply write two versions of the function. One will do the actual work of the function, and the other will handle the Nothing case.</p>
+<p>p So what do we win here? I personally like the pattern matching syntax better than</p>
+<p>pre. String greet(String name) { if (name == Null) { … } else { … } }</p>
+<p>p But that’s not the big win. The magic is in the return value of our greet function. It’s a String, not a Maybe String! That means we <em>know</em> we will always get a String back from that function. You can display it right in a web page without having to consider the Null case. It actually saves us from having to write error checking code in other places. We only write it when the compiler tells us we <em>need</em> to.</p>
+<p>p So Swift also has this feature, but it makes a small concession to the imperative world of programming. From the <a href="https://developer.apple.com/library/prerelease/mac/documentation/Swift/Conceptual/BuildingCocoaApps/InteractingWithObjective-CAPIs.html">Swift docs</a>:</p>
+<p>p em “Of course, if you are certain of the type of the object (and know that it is not nil), you can force the invocation with the as operator.”</p>
+<p>p The question is, if the type says that a value might be nil, how sure can you ever be that the value will never be nil? This sort of assumption may be true when the code is first written, but it tends to break after refactoring. If the value will really truly never be nil, then it shouldn’t have been an Optional in the first place.</p>
+<p>p To be fair, the Haskell compiler GHC only generates a warning for not handling a Nothing case, but I do think that’s a big step up from trusting the code as written.</p>
+<p>p So, embrace the uncertainty! Learn to love Maybe! Kick Null to the curb!</p>
+    </section>
+</article>
+
+        </div>
+      </section>
+      <footer>Copyright Axis Sivitz 2013-2020<footer>
+    </div>
+  </body>
+</html>

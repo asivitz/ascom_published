@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+    <title></title>
+    <meta name="description" content />
+    <meta name="viewport" content="width=device-width" />
+
+    <!-- Place favicon.ico and apple-touch-icon.png in the root directory-->
+    <link rel="shortcut icon" href="../favicon.ico" />
+
+    <script src="http://code.jquery.com/jquery-2.1.0.min.js"></script>
+
+    <!--
+    if head
+        - var path = current.path.join("/") + "_head"
+        != partial(path, null)
+        -->
+    <link rel="stylesheet" href="../css/normalize.css" />
+    <link rel="stylesheet" href="../css/main.css" />
+    <link rel="stylesheet" href="../css/style.css" />
+    <link rel="stylesheet" href="../css/longform.css" />
+
+    
+
+    <script src="../js/vendor/modernizr-2.6.2.min.js"></script>
+    <script type="text/javascript" , src="//use.typekit.net/ovr5ukj.js"></script>
+    <script type="text/javascript">
+        try{Typekit.load();}catch(e){}
+    </script>
+  </head>
+  <body>
+    <div id="wrapper">
+      <header>
+        <div>
+          <a href="../">Main</a>
+        </div>
+      </header>
+      <section id="main">
+        <div class="contentwrapper">
+          <article>
+    <section class="header">
+        Posted on 4/16/14
+        
+    </section>
+    <section>
+        <p>p I used <a href="http://gambitscheme.org/">Gambit Scheme</a> to build my iOS game <a href="../cloudbreaker">Cloud Breaker</a>. Here are the steps you can take to get Gambit up and running on your iPhone or iPad. I assume you have the latest version of Xcode installed (I have Xcode 5.1.1).</p>
+<p>p I originally used <a href="http://jlongster.com/s/jlongster-old/pages/blog/write-apps-iphone-scheme.html">jlongster’s post</a> to get started. It has a lot of good information as well, but some things have changed since that post was written. My goal with this guide is to give a more up-to-date overview (until everything changes again).</p>
+<p>h2 Overview</p>
+<p>p Gambit Scheme is a compiler that translates Scheme code into C code. The generated C code can then run on just about anything (iPhones and iPads in this case), but we also need to link that C code to a build of the Gambit Runtime, libgambc.a, which handles garbage collection, standard library calls, etc.</p>
+<p>p Xcode is happy to compile the generated C code just like any other source files, but we’ll build the runtime library separately so that we don’t have to rebuild it after a project clean, and so that we can link it to multiple independent projects.</p>
+<p>h2 Step 1: Get the Gambit Source</p>
+<p>pre $ git clone https://github.com/feeley/gambit.git</p>
+<p>h2 Step 2: Build the Gambit Compiler for Your System</p>
+<p>p We want a build of Gambit for our system to get gsc and gsi, the compiler and the interpreter, so that we can compile our Scheme code into something the device can run. It’s also handy to be able to interpet the Scheme code on our system, which is faster for building and testing than pushing to the device every time.</p>
+<p>p Gambit compiles faster and generates a faster runtime with recent gcc versions (versus the gcc that Apple provides which uses LLVM). So before building Gambit, I installed gcc 4.8 via <a href="http://brew.sh/">homebrew</a>.</p>
+<p>pre. $ brew install gcc48</p>
+<p>p Now let’s build Gambit using our new compiler. pre. $ cd gambit $ CC=/usr/local/bin/gcc-4.8 ./configure –enable-single-host $ make -j4 from-scratch $ make check $ sudo make install $ gsc -v pre.output. v4.7.2 20140411185957 x86_64-apple-darwin13.1.0 “./configure ‘–enable-single-host’ ‘CC=/usr/local/bin/gcc-4.8’” p The -j4 option tells make to use 4 simultaenous jobs, which is the number of CPU cores on my system. Modify this as necessary.</p>
+<p>p After this we have a Gambit compiler (gsc) and intepreter/REPL (gsi).</p>
+<p>pre. $ gsi pre.output. Gambit v4.7.2 pre. &gt; (+ 1 2) pre.output. 3 pre. &gt; ,q</p>
+<p>h2 Step 3: Build the Gambit Runtime Library</p>
+<p>p You need to build the Gambit runtime library for each architecture you want to run on. I do armv7 (iPhone 3GS through iPhone 4S), armv7s (iPhone 5 and later), and i386 (for the Simulator). We’ll pack them all into one library for convenience sake.</p>
+<p>p I believe that the newer devices will run armv7 code, but the armv7s code should run faster.</p>
+<p>p I recommend using my build script instead of the current one in the main repo. There are some changes for compatibility with the latest Xcode versions and some other tweaks that should save some build time. pre $ wget https://raw.github.com/asivitz/gambit/master/misc/build-gambit-iOS -O misc/build-gambit-iOS</p>
+<p>pre. $ cd misc $ sh build-gambit-iOS –no-update -j 4 p The script builds the two arm architectures and the i386 arch, and packs it into a library. This takes a long time (over a couple hours on my laptop). The reason it’s slow is that we have to use Apple’s LLVM-based compilers to build the ARM runtimes.</p>
+<p>p The –no-update flag stops the script from updating the downloaded distribution to HEAD, and instead builds from the latest release version.</p>
+<p>p -j 4 specifies the number of make jobs, again, equal to my CPU cores.</p>
+<p>p Anyway, once it’s done, check it to make sure it has all your desired architectures: pre. $ file gambit-iOS/current/lib/libgambc.a pre.output. libgambc.a: Mach-O universal binary with 3 architectures libgambc.a (for architecture i386):i386 current ar archive random library libgambc.a (for architecture armv7):armv7 current ar archive random library libgambc.a (for architecture armv7s):armv7s current ar archive random library</p>
+<p>h2 Step 4: Link the Gambit Library to Your App</p>
+<p>p In your Xcode project, go to your build settings and find the Search Paths section.</p>
+<p>p Add a library search path… pre Library Search Paths PATH_TO_GAMBIT/misc/gambit-iOS/current/lib p And a user header search path… pre User Header Search Paths PATH_TO_GAMBIT/misc/gambit-iOS/current/include</p>
+<p>p In the Linking section, add a linker flag for the gambit library. pre Other Linker Flags -lgambc</p>
+<p>p Since we’re embedding the gambit runtime into our app, we need to tell gambit not to generate a main function. So we need to define _<strong>LIBRARY. In my Xcode 5.1, you do that in the Apple LLVM 5.1 - Preprocessing section. pre Preprocessor Macros Not Used In Procompiled Headers </strong>_LIBRARY</p>
+<p>h2 Step 5: Write some Scheme Code</p>
+<p>p Here’s a good starting point. Save it in a file called “init.scm” in your project’s source folder. pre. ; pure Scheme call (println “We’re here in Scheme land!”)</p>
+<p>; Scheme function callable from C (c-define (c-add-five num) (int) void “add_five” &quot;&quot; (+ 5 num))</p>
+<p>; C function callable from Scheme (define nslog (c-lambda (char-string) void &quot; NSString * str = [NSString stringWithCString:___arg1 encoding:NSASCIIStringEncoding]; NSLog(@&quot;Logging: %@&quot;, str); &quot;))</p>
+<p>(nslog “Hello Obj-C World!”)</p>
+<p>h2 Step 6: Compile the Scheme code into C</p>
+<p>p Although we want to be able to run this code on ARM, the Gambit compiler produces the exact same C code no matter what platform the compiler is run on. So we’ll use the normal system compiler.</p>
+<p>p Compile each of your Scheme files into .m files. (Right now you just have one.) pre. # From your project’s source folder, where you put init.scm $ gsc -c -o init.m init.scm $ ls init* pre.output. init.m init.scm</p>
+<p>p Create a link file out of your new .m file(s). pre. $ gsc -link -o init_.m init.m $ ls init* pre.output. init.m init_.m init.scm</p>
+<p>p Go into Xcode. Add init.m and init_.m to your project. Make sure they are added to your target, or else they won’t get compiled in.</p>
+<p>h2 Step 7: Execute the Gambit Runtime in Your App</p>
+<p>p Add this code to your ViewController.m class above its implementation. Be sure to match the ___VERSION define with your Gambit scheme version.</p>
+<p>pre.prettyprint. /* These function defs match what is declared in your scheme code. */ void add_five(int num);</p>
+<p>/* This version number must match what’s written in include/gambit.h.in in * the gambit source distribution. 407002 is the version number for Gambit 4.7.2 */ #define ___VERSION 407002 #include “gambit.h”</p>
+<p>/<em> </em> Define SCHEME_LIBRARY_LINKER as the name of the Scheme library * prefixed with “____20_” and suffixed with &quot;__&quot;. This is the * function that initializes the Scheme library. * I use init because my main scheme file is called init.scm */</p>
+<p>#define SCHEME_LIBRARY_LINKER ____20_init__</p>
+<p>_<strong>BEGIN_C_LINKAGE extern </strong>_mod_or_lnk SCHEME_LIBRARY_LINKER (___global_state_struct*); ___END_C_LINKAGE</p>
+<p>void gambit_setup() { /<em> </em> Setup the Scheme library by calling &quot;_<strong>setup&quot; with appropriate * parameters. The call to &quot;</strong>_setup_params_reset&quot; sets all * parameters to their default setting. */</p>
+<pre><code>  int debug_settings = ___DEBUG_SETTINGS_INITIAL;
+
+  ___setup_params_struct setup_params;
+
+  ___setup_params_reset (&amp;setup_params);
+
+  setup_params.version        = ___VERSION;
+  setup_params.linker         = SCHEME_LIBRARY_LINKER;
+  setup_params.debug_settings = debug_settings;
+
+  ___setup (&amp;setup_params);</code></pre>
+<p>}</p>
+<p>void gambit_cleanup() { ___cleanup (); }</p>
+<p>p Add gambit_cleanup() to your dealloc method. <em>[super dealloc] omitted because I assume you’re using ARC.</em></p>
+<p>pre. - (void)dealloc { … gambit_cleanup(); }</p>
+<p>p Add gambit_setup() to your viewDidLoad method</p>
+<p>pre. - (void)viewDidLoad { [super viewDidLoad]; … gambit_setup(); }</p>
+<p>h2 Step 8: ??? p We’re ready to go! Build and run the app and celebrate! p Or curse the errors you’re getting and ping me on <a href="http://twitter.com/asivitz">twitter</a>. h2 Step 9: Profit!</p>
+    </section>
+</article>
+
+        </div>
+      </section>
+      <footer>Copyright Axis Sivitz 2013-2020<footer>
+    </div>
+  </body>
+</html>

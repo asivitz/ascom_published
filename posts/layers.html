@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+    <title></title>
+    <meta name="description" content />
+    <meta name="viewport" content="width=device-width" />
+
+    <!-- Place favicon.ico and apple-touch-icon.png in the root directory-->
+    <link rel="shortcut icon" href="../favicon.ico" />
+
+    <script src="http://code.jquery.com/jquery-2.1.0.min.js"></script>
+
+    <!--
+    if head
+        - var path = current.path.join("/") + "_head"
+        != partial(path, null)
+        -->
+    <link rel="stylesheet" href="../css/normalize.css" />
+    <link rel="stylesheet" href="../css/main.css" />
+    <link rel="stylesheet" href="../css/style.css" />
+    <link rel="stylesheet" href="../css/longform.css" />
+
+    
+
+    <script src="../js/vendor/modernizr-2.6.2.min.js"></script>
+    <script type="text/javascript" , src="//use.typekit.net/ovr5ukj.js"></script>
+    <script type="text/javascript">
+        try{Typekit.load();}catch(e){}
+    </script>
+  </head>
+  <body>
+    <div id="wrapper">
+      <header>
+        <div>
+          <a href="../">Main</a>
+        </div>
+      </header>
+      <section id="main">
+        <div class="contentwrapper">
+          <article>
+    <section class="header">
+        Posted on 9/12/16
+        
+    </section>
+    <section>
+        <p>In this post I will look at the ideas behind programming user interfaces and present a method for building them in a pure functional setting.</p>
+<ul>
+<li>In <a href="#partone">Part 1</a> I explain the fundamental ideas behind building interactive programs.</li>
+<li>In <a href="#parttwo">Part 2</a> I look at how React/Flux implements these ideas.</li>
+<li>In <a href="#partthree">Part 3</a> I describe a set of combinators for building a pure update function.</li>
+<li>In <a href="#partfour">Part 4</a> I present an implementation of these combinators in Haskell, as well as some example code.</li>
+</ul>
+<h1 id="part-1-whats-going-on-in-the-front-end"><a name="partone"></a>Part 1: What’s Going on in the Front End</h1>
+<p>Let’s start by dividing all computer programs into two buckets. We’re talking about desktop apps, phone apps, websites, command line utilities, everything.</p>
+<p>In the first bucket we’ll put non-interactive programs. These programs take all their input up front, and then do <em>something</em> or give back some answer. Most command line programs act in that way.</p>
+<pre><code>$ ls
+Foo.txt Bar/</code></pre>
+<p>Non-interactive programs are easy to write.</p>
+<p>I say ‘easy’ because their structure is simple, although of course I am being a bit tongue in cheek. Compilers and media transcoders would fall into this category, and it wouldn’t be easy to write their algorithms or make them fast, but their structure is always the same. It’s a pipeline that takes the initial inputs and transforms them in some way, yielding some outputs. And these programs will be built this way until the end of time! There’s really no other way to do it.</p>
+<pre><code>(Take in Input) ---&gt; ... ---&gt; (Produce Output)</code></pre>
+<p>The second bucket, of course, holds interactive programs. And really, most programs that people use on a daily basis are interactive.</p>
+<p>Interactive programs are much harder to structure. Or maybe instead I should say that the piece of the program that handles user interaction is hard to structure. After all, it earns its own name: the front end.</p>
+<p>There are so many ideas out there for how to build them (object oriented versions of <a href="https://en.wikipedia.org/wiki/Model%E2%80%93view%E2%80%93controller">MVC</a>, <a href="https://en.wikipedia.org/wiki/Functional_reactive_programming">FRP</a>, <a href="http://guide.elm-lang.org/architecture/index.html">“The Elm Architecture”</a>, and <a href="https://facebook.github.io/flux/docs/overview.html">React/Flux</a>, among many others), but nothing approaches concensus. And the consequences for building a front end badly include: bugs (including very subtle ones), slow development time, and inflexible code that cannot adapt to changing requirements. So it’s a pretty interesting problem to work on!</p>
+<h2 id="what-is-an-interactive-program">What Is an Interactive Program?</h2>
+<p>Interactive programs run in a loop. On each iteration, they take in some input (like a mouse click or key press), and use it to update their state (also called the Model), and then perhaps show some representation of the state to the user (also called rendering or viewing).</p>
+<pre><code>&lt;Loop&gt; ---&gt; (Take in Input) ---&gt; (Update State) ---&gt; (View) ---&gt; &lt;Back to Loop&gt;</code></pre>
+<p>The view part is structurally pretty uninteresting. It takes the Model and generates some view representation– maybe HTML or OpenGL commands. It’s straightforward in the same way that pipeline programs are.</p>
+<p>But the update loop! That’s where all the conflict arises. And the need to perform these updates elegantly is what drives the invention of so many paradigms and frameworks. Most of them boil down to a simple state machine. In other words, given some input, we need to find a new state for our program. There are many ways to model this, but I think one way worth exploring is the simplest: the function.</p>
+<p>So at the core of the update loop could be a single function (the update function), which takes in input and produces a new program state.</p>
+<h2 id="what-is-an-update-function">What Is an Update Function?</h2>
+<p>An update function takes as arguments the previous state of the program as well as some input value, and it returns a new input state.</p>
+<pre><code>Old State + Input = New State</code></pre>
+<p>If you’re familiar with MVC, then it’s roughly the “Controller” part of <a href="https://en.wikipedia.org/wiki/Model%E2%80%93view%E2%80%93controller">MVC</a>, but expressed as a pure function. I’ll call this function ‘update’. A C-like language might use it like so:</p>
+<pre><code>Model appState = newAppState(); // Create the initial program state
+while(true) {
+    foreach (Input input in getInputs()) {
+        appState = update(appState, input); // Update the program state for each new input
+    }
+    renderScreen(appState); // Update the view based on the new program state
+}</code></pre>
+<p>So again, we’re going to ignore all of that code <em>except</em> for the update function, which is really the interesting part. Now, what might be inside of such a function? You can imagine an update function for a game might be something like, “if Mario is standing on solid ground, and the player hit the Jump button, then send Mario into the air.” And furthermore, since our update function is <em>pure</em>, that means it can’t directly modify the old state, but instead must produce a new state. So really it would say, “Given a state where Mario is standing on solid ground, and an input where the player hit the jump button, give back a state where Mario is heading up into the air.”</p>
+<p>The type signature for <em>update</em> is:</p>
+<pre><code>Model update(Model, Input);</code></pre>
+<p>Let’s move over to Haskell syntax, as it’s a bit more natural language for talking about types. In Haskell we have:</p>
+<pre><code>update :: Model -&gt; Input -&gt; Model</code></pre>
+<p>That means ‘update’ has a type which is a function that takes a Model and an Input and yields a Model. (The return type is just the last type in the arrow list.)</p>
+<h2 id="what-makes-interactive-programs-so-dang-complicated">What Makes Interactive Programs So Dang Complicated</h2>
+<p>The real difficulty is that, in some sense, the update function will <em>change its behavior</em> depending on the current state, which makes it more challenging to design well.</p>
+<p>Here’s an example:</p>
+<p>Let’s say you’re writing a drawing program. It has a main drawing area and some different tools you can select on the left, and some typical menu buttons up top. If you click on the pencil tool, that tool is selected. And then clicking on the canvas will draw with the pencil. Clicking on the square tool will select it, and then clicking on the canvas will create squares. So, clicking on the canvas will have a different meaning depending on what the selected tool is. And clicking on the tools has a different meaning (tool selection) than clicking on the canvas (drawing).</p>
+<pre><code>------------------------
+|[New] [Open]          |
+------------------------
+|[Pencil]|             |
+|[Square]|   /\   /\   |
+|--------|             |
+|               ^      |
+|                      |
+|            \_____/   |
+|                      |
+------------------------</code></pre>
+<p>So it’s not just a static pipline from input to output. The program needs to keep track of some state (for example the currently selected brush), and the meaning of the input changes based on the current state. In a way, the pipeline itself changes.</p>
+<p>Actually, I don’t think I should call it a pipeline at all, because in an interactive program the inputs aren’t carried directly from start to finish down one path. Instead, the input flow branches. Like if you clicked “New” and a dialogue box popped up:</p>
+<pre><code>----------------------------------------------
+| Are you sure you want to erase everything? |
+|                                            |
+|                        [Yes] [Cancel]      |
+----------------------------------------------</code></pre>
+<p>If you click ‘Yes’, the program needs to both close the dialogue box and also erase the canvas, which are really two very unrelated things. I can draw the input flow like this:</p>
+<pre><code>                            ---&gt; (Update Dialogue Boxes) --
+&lt;Loop&gt; --&gt; (Take in Input) -|                             |--&gt; (View) --&gt; &lt;Back to Loop&gt;
+                            ---&gt; (Update Canvas) ----------</code></pre>
+<p>So the input needs to go to multiple places (carrying different meanings!).</p>
+<h2 id="code-that-does-multiple-unrelated-things">Code That Does Multiple Unrelated Things</h2>
+<p>This is really the crux of the matter. Closing dialogue boxes is unrelated to drawing pictures, so the dialogue box state should be kept separate from the drawing state, and the code that runs these systems should be kept separate as well. There are huge benefits for doing this properly.</p>
+<p>If our application draws pictures, then we should be able to reuse some kernel of it in many different contexts– web app, phone app, command line, or even an automatic picture drawing AI. Likewise, the UI code should understand dialogue box behavior but NOT anything about drawing pictures. That will allow us to use the same UI code in many different applications. So by keeping these pieces separated, we get code that is more reusable, which in turn makes it more readable, less buggy, and likely better tested as well. It’s really the road to success.</p>
+<p>But how can we separate these things, when they are clearly tied so closely together at some point in our application? It helps to think in terms of input types.</p>
+<p>From the perspective of our drawing code, the inputs are commands like “Draw Pixel at coordinate X/Y” or “Draw Square from X/Y to W/H” or “Erase Drawing”, and it doesn’t matter what the actual raw input is. (I.e., our drawing code shouldn’t care whether it takes in mouse clicks or button presses or anything else.) On the other hand, our UI takes inputs like “Yes Button Clicked”, and it should be able to close the dialogue without understanding what the “Yes” button is really supposed to do.</p>
+<h2 id="to-summarize">To Summarize</h2>
+<p>We want to build our application out of multiple unrelated pieces (i.e. multiple update functions), which we then glue together to create the final update function, that we plug into the update loop to drive our interactive application.</p>
+<p>(Instead of the long-winded name “update function”, I’m going to start calling them “layers”. The name makes sense if you think of building the final update function by stacking layers of different functionality.)</p>
+<p>This glue code will be able to translate our raw inputs into the specific input types needed by each layer.</p>
+<p><strong>AND</strong>, as we saw in the drawing example, <em>sometimes the translation of the inputs will be affected by the state of some layer</em>. We can’t always turn a click on the canvas into a Draw Pixel Input. Sometimes it’s a Draw Square Input, depending on the state of the UI.</p>
+<p><strong>AND</strong>, as we saw in the dialogue example, sometimes one input will need to be carried to multiple places.</p>
+<p>So, the interesting part of an interactive application is the update function. And the interesting part of an update function is the glue code that binds the disparate pieces of the application together. So that glue code is what we will focus on from here on out!</p>
+<h1 id="part-2-how-does-reactflux-implement-these-ideas"><a name="parttwo"></a>Part 2: How Does React/Flux Implement These Ideas?</h1>
+<p>Facebook has a project called <a href="https://facebook.github.io/react/index.html">React</a> used for building interactive websites, and a <a href="https://facebook.github.io/flux/docs/overview.html">Flux</a> architecture for managing application state. Together, they handle all the stuff I just wrote about, <em>although not generically</em>. You might not care about React/Flux, but bear with me. I think it’s interesting to look at how this problem is tackled commerically, and where there might be room for improvement.</p>
+<p>So the key point here is that React layer maintains the UI state and translates raw input (usually HTML link clicks) into Flux actions (i.e. the application level inputs), and then Flux is basically just a simple update function that translates those actions into new application state.</p>
+<p>It’s a limited version of what I described above. There are two states– application state (in the Flux store) and UI state (in the React components). And the raw input, link clicks, will both update the UI state and also be translated into Flux actions which are then used to update the Flux store.</p>
+<p>So React/Flux has two layers, and just to be clear, here’s a table describing them by their state and input types:</p>
+<pre><code>Layer 1: State Type = UI State, Input Type = Browser Clicks
+Layer 2: State Type = Application State, Input Type = Flux Actions</code></pre>
+<p>Now, don’t get me wrong, this works out pretty well! React/Flux has many happy customers, and it’s growing in popularity.</p>
+<p>But you can <em>only</em> have two types of state (application state and UI state). And you can <em>only</em> have two input types, the raw mouse clicks you get from the browser, and the Flux actions. This works fine for many applications, but that doesn’t mean it is ideal.</p>
+<p>What if we could have any number of states, any number of input types, any number of layers, and any sort of relationship between the layers?</p>
+<h2 id="wait-why-is-this-really-a-problem">Wait, Why? Is This Really a Problem?</h2>
+<p>In a simple example, it’s pretty clear where to draw the line between the two layers. But as an application grows, there may be more and more opportunities to split it into multiple layers. Instead of just one UI layer at the top, it may make for better architecture to have many.</p>
+<p>Going back to our drawing example, our canvas might have some overlay that is affected by tool selection, but is still considered an interface to the core drawing functionality. Perhaps there are some draggable nodes that show up on the canvas when the line tool is selected. Now imagine those node handles have their own state (like if you click on one it changes the dragging style from snapping to smooth), React/Flux would force you to make a binary choice about whether that new state is considered UI or Application, and whether the inputs that the node dragging generates are considered “Flux Actions”. We are clearly talking about some form of UI, but is this really the same level as the overall UI? Or is it more closely tied to the drawing paradigm?</p>
+<p>Sometimes it’s not clear whether something is “application” or “UI”. Sometimes it doesn’t fit squarely in either camp. Sometimes you need an intermediate layer.</p>
+<p>Luckily, it’s no extra work to be more general here. The 2 layer React/Flux design is just a special case of a more general solution that I’ll outline in the next section.</p>
+<h1 id="part-3-combinators-for-building-pure-update-functions"><a name="partthree"></a>Part 3: Combinators for Building Pure Update Functions</h1>
+<p>Just to unpack that title a bit:</p>
+<ul>
+<li>Pure Function - A function that returns a value calculated only from its arguments. It cannot reference or modify state outside the function.</li>
+<li>Combinator - A function that takes functions as arguments and returns a new function.</li>
+</ul>
+<p>So, what do I mean by ‘building’ an update function? Well it would be insane to write out an entire application as one giant function. As mentioned up above, good structure comes from separating unrelated modules of code. So we’ll assume that we can write smaller update functions to handle each part of the application, and then we can use some combinators to bring them all together into one master update function.</p>
+<p>This is the ‘glue code’ I talked about earlier. We need a library of functions that will let us glue layers together!</p>
+<p>This section will introduce the combinators with a little bit of Haskell syntax, but will be light on details. I want to give the flavor of building UIs in this way, without getting lost in the particulars. The following section will provide actual implementations and examples.</p>
+<h2 id="side-note-for-experienced-functional-programmers">Side-note for Experienced Functional Programmers</h2>
+<p>Modeling these update functions as having the type (state -&gt; input -&gt; state) affects the ways we can combine them. Instead, we could model them using the reader and state monads, which would mean we could use more of the standard haskell library to manipulate them. However, in practice I’ve found that usually it reads better to just write the simple functions. But another approach would be to provide some helpers to convert between the two models:</p>
+<pre><code>type Layer s i = ReaderT i (State s) ()
+
+unlayer :: Layer s i -&gt; s -&gt; i -&gt; s
+unlayer a s i = execState (runReader a i) s
+
+layer :: (s -&gt; i -&gt; s) -&gt; Layer s i
+layer f = do
+        s &lt;- get
+        i &lt;- ask
+        put (f s i)</code></pre>
+<h2 id="crash-course-in-haskell-syntax">Crash Course in Haskell Syntax</h2>
+<p>If you can read C, then this will get you pretty far. The following two code blocks are roughly equivalent:</p>
+<pre><code>// C
+int foo(int bar, int baz) {
+    return bar + baz;
+}
+
+foo(3,4);
+
+___________________________
+
+-- Haskell
+foo :: Int -&gt; Int -&gt; Int
+foo bar baz = bar + baz
+
+foo 3 4</code></pre>
+<p>So, in Haskell, function names and arguments always start with a lowercase letter, while type names start with a capital. And the type signature of a function is written on a separate line from the implementation.</p>
+<p>Now, onto the combinators!</p>
+<h2 id="simple-composition">Simple Composition</h2>
+<p>Imagine our program is a game and its state is made up of two smaller states– the UI state and the Game state. In Haskell we could write that like this:</p>
+<pre><code>-- The Model type is a pair consisting of two other types, UIState and GameState
+type Model = (UIState, GameState)</code></pre>
+<p>If we have an update function for each piece of state, then we need a function to combine them so that a single input is passed into both of them. It’s so fundamental that we can make up an operator for it, which I’ll write as <strong>*.*</strong>.</p>
+<p>Using this operator, here’s a possible definition of our update function.</p>
+<pre><code>update = updateUI *.* updateGame</code></pre>
+<p>That, again, is Haskell syntax, and it can be read as, “The update function is equal to the updateUI function combined with the updateGame function using the *.* operator.”</p>
+<p>Note that this function will give you the updated state, but what to do with it is up to you! In other words, everything we build here is just one big pure function. (Presumably, you plug it into some update loop.)</p>
+<p>Each smaller update function has the same type as the big one, which makes it easy to combine them. We can write their type signatures like this:</p>
+<pre><code>update     :: Model -&gt; Input -&gt; Model
+updateUI   :: Model -&gt; Input -&gt; Model
+updateGame :: Model -&gt; Input -&gt; Model</code></pre>
+<p>Although the <em>updateGame</em> function operates on only a portion of the <em>Model</em> state, it’s type signature demands that it take in the entire <em>Model</em>. Let’s see if we can fix that.</p>
+<h2 id="scoping-updates">Scoping Updates</h2>
+<p>It would be nice to define our <em>updateGame</em> function in a way that completely isolates it from the UI state. In other words, we want the type of <em>updateGame</em> to be <em>GameState -&gt; Input -&gt; GameState</em>.</p>
+<p>Luckily, the functional community has already figured out a nice technique for doing this. Using something called a <em>lens</em>, we can apply a function to just one part of a whole. The only lenses I’ll use here are the ones that pick out individual pieces of a tuple. So for our pair, we have **_1<strong>, which applies to the first item in a pair, and </strong>_2**, which applies to the second item.</p>
+<p>Now we just need a combinator that uses a lens to scope an update function to a particular part of the <em>Model</em>. I’ll call it <em>liftState</em>.</p>
+<pre><code>update = (liftState _1 updateUI) *.* (liftState _2 updateGame)</code></pre>
+<p>I added parentheses in the update definition to make it easier to read, but the basic idea is that the first argument to <em>liftState</em> is a lens to use and the second is the update function we want to apply.</p>
+<p>Pay attention to how the types of the layers changed. Now the <em>updateGame</em> function doesn’t have any knowledge of the UIState type, and similarly <em>updateUI</em> is isolated from the game state. Here are the new type signatures.</p>
+<pre><code>update     :: Model -&gt; Input -&gt; Model
+updateUI   :: UIState -&gt; Input -&gt; UIState
+updateGame :: GameState -&gt; Input -&gt; GameState</code></pre>
+<p>If you want to learn more about lenses, check out: http://www.haskellforall.com/2013/05/program-imperatively-using-haskell.html</p>
+<h2 id="changing-inputs">Changing Inputs</h2>
+<p>Up until now, we haven’t looked inside of the Input type. For a real program it could have a definition like this:</p>
+<pre><code>data Input = KeyDown Key
+           | KeyUp Key
+           | Click Point
+           | Tick Double</code></pre>
+<p>That means an Input could either be a KeyDown, or a Click, etc… You can think of it as an enum, but where each member can carry additional data.</p>
+<p>The last one, Tick, can be used to step forward the simulation or the UI. Its “Double” member would be the time delta since the last update. One of these inputs would be emitted every frame.</p>
+<p>So just as we changed the state basis of our sub layers, we might also want to change what input they receive. For example, our game layer should take in messages like “PlayerJump” instead of “KeyDown SpaceBar”. This will make our code more reusable. It will be easy to have, say, a touchscreen interface as well as a keyboard interface without changing our game logic at all.</p>
+<p>We’ll accomplish this with a combinator called “liftInput”. Its first argument is a function that transforms inputs in some way, and its second argument is an update function. So our new master update function might look like this:</p>
+<pre><code>update = liftState _1 updateUI *.* liftState _2 (liftInput playerControls updateGame)</code></pre>
+<p><em>playerControls</em> should just be a function that transforms raw inputs to game inputs. So it could look like this:</p>
+<pre><code>data GameInput = PlayerJump
+               | PlayerMoveRight
+
+playerControls (KeyDown SpaceBar) = PlayerJump
+playerControls (KeyDown Right) = PlayerMoveRight
+...</code></pre>
+<p>In Haskell, you can give multiple definitions for a function where each matches a different pattern for the input. So depending on what key is pressed a different definition of <em>playerControls</em> will be used.</p>
+<p>I should note the new type of <em>updateGame</em>.</p>
+<pre><code>updateGame :: GameState -&gt; GameInput -&gt; GameState</code></pre>
+<p>See how nice and domain specific it is?</p>
+<h2 id="conditionals">Conditionals</h2>
+<p>Now let’s say we want our game to have a pause menu. You can imagine added complexity here, since upon pausing we want to completely disable the game layer. But we can add another combinator to make this easy.</p>
+<p><em>when</em> will take two functions as arguments. The second, as usual, is an update function that may or may not be run. The first is a predicate on Model. In other words, it’s a function that determines whether or not we are paused.</p>
+<p>So if we have a <em>paused</em> function:</p>
+<pre><code>paused :: Model -&gt; Bool</code></pre>
+<p>Then we can write our update function like this:</p>
+<pre><code>-- Split into multiple lines for readability
+update = liftState _1 updateUI *.*
+         when (not . paused) (liftState _2 (liftInput playerControls updateGame))</code></pre>
+<p>To make it easier to read we can pull these pieces out into separate functions. So this is equivalent to the above:</p>
+<pre><code>uiLayer :: Model -&gt; Input -&gt; Model
+uiLayer = liftState _1 updateUI
+
+gameLayer :: Model -&gt; Input -&gt; Model
+gameLayer = liftState _2 (liftInput playerControls updateGame)
+
+update = uiLayer *.* when (not . paused) gameLayer</code></pre>
+<h2 id="post-processing">Post-Processing</h2>
+<p>Sometimes we want to transform the output of an update function. As an example, we might want to add something called a ‘time-traveling debugger’. The basic idea is that we record the new states that are generated by an update function, and later we can browse through them to see where a problem occured. (For a nice example of this technique in action, check out <a href="https://www.youtube.com/watch?v=xsSnOQynTHs">this video</a> demonstrating the JS framework <a href="http://redux.js.org/">Redux</a>’s implementation of a time traveling debugger.)</p>
+<p>The implementation details require a little more Haskell knowledge, but once they are ready to go it’s really easy to add to a project.</p>
+<p>First we’ll change our <em>Model</em> type a bit so that the <em>GameState</em> is wrapped inside of a type called <em>Debug</em>. This basically means that we’ll be storing multiple <em>GameState</em>s instead of just one.</p>
+<pre><code>type Model = (UIState, Debug GameState)</code></pre>
+<p>Now we just postProcess our game layer with a function called <em>debugResolver</em>, which will handle storing new game states as they are produced, and picking out a specific game state as we step back in time.</p>
+<pre><code>update = uiLayer *.* postProcess debugResolver gameLayer</code></pre>
+<h2 id="interactive-ui">Interactive UI</h2>
+<p>Until now, we haven’t actually seen an example equivalent in power to React. In other words, we haven’t seen this:</p>
+<ol type="1">
+<li>Take in raw input (clicks)</li>
+<li>Update UI (e.g., close dialogue box).</li>
+<li>Generate app-specific messages (e.g., erase drawing)</li>
+<li>Update app state with any generated messages</li>
+</ol>
+<p>But we do have nearly everything we need to do it. It’s really just a combination of <em>liftInput</em>s and <em>liftState</em>s, plus one extra thing: a way to change the <em>liftInput</em> behavior depending on the UI state. Afterall, we only want to generate an “erase” message when the proper button is clicked, and sometimes that button isn’t even on the screen.</p>
+<p>That ‘one extra thing’ is the <em>dynamic</em> combinator. It simply passes in the current state so that it can be used in building the update function. With it we can build a function, <em>mainLayer</em>, which takes a <em>Model</em> and then returns an update function.</p>
+<pre><code>-- this function, 'mainLayer', has an argument which is the current state
+-- it returns an update function
+mainLayer :: Model -&gt; (Model -&gt; Input -&gt; Model)
+mainLayer currentState = liftInput (uiClick currentState) subLayer
+
+update :: Model -&gt; Input -&gt; Model
+update = dynamic mainLayer
+
+-- we'll use a type called 'UIClick' to describe some representation
+-- of the UI action. I.e., maybe it describes a particular menu item
+-- being picked, or a particular dialogue box button being clicked
+type UIClick = ...
+
+-- this function, 'uiClick', takes in the current state and returns
+-- a function that translates raw inputs to a UIClick
+uiClick :: Model -&gt; (Input -&gt; UIClick)
+uiClick = ...
+
+-- this update function operates on 'UIClicks' instead
+-- of raw inputs
+subLayer :: Model -&gt; UIClick -&gt; Model
+subLayer = liftState _1 updateUI *.* liftState _2 (liftInput gameClick updateGame)
+
+-- I won't provide implementations for these functions,
+-- but you can tell from the type signatures what they might do
+
+-- 'gameClick' will translate 'UIClicks' into the normal 'GameInputs'
+-- that the updateGame layer understands
+gameClick :: UIClick -&gt; GameInput
+gameClick = ...
+
+updateUI :: UIState -&gt; UIClick -&gt; UIState
+updateUI = ...
+
+updateGame :: GameState -&gt; GameInput -&gt; GameState
+updateGame = ...</code></pre>
+<p>That’s the whole structure of React/Flux in a few lines of code, and it’s more powerful to boot! If it’s just one more tool in your toolbox instead of some all-powerful “architecture”, then surely your codebase will grow more flexible over time.</p>
+<h1 id="part-4-implementations-and-examples"><a name="partfour"></a>Part 4: Implementations and Examples</h1>
+<p>This section will cover the same ground as Part 3, but in more detail.</p>
+<p>Just a warning– all the code will be in Haskell from here on out. I’ll give some more examples of Haskell syntax that I’ll use, but if you want a more expansive introduction, check out this guide: http://prajitr.github.io/quick-haskell-syntax/</p>
+<p>Haskell’s sum-types can be made this way:</p>
+<pre><code>-- Haskell
+data Day = Monday | Tuesday</code></pre>
+<p>This is roughly equivalent to:</p>
+<pre><code>// C
+enum DAY { monday, tuesday };</code></pre>
+<p>A record type looks like this:</p>
+<pre><code>-- Haskell
+data Point = {
+    x :: Int,
+    y :: Int
+}</code></pre>
+<p>This is roughly equivalent to:</p>
+<pre><code>// C
+struct Point {
+    int x;
+    int y;
+};</code></pre>
+<p>Haskell types can take arguments. Here are some syntax examples. -</p>
+<pre><code>type Foo a = (a,a)    -- this means &quot;Foo Int&quot; would be a synonym
+                      -- for the pair type &quot;(Int, Int)&quot;
+
+type Bar b = String -&gt; b -- this means &quot;Bar Int&quot; would be a synonym
+                         -- for the function type &quot;String -&gt; Int&quot;</code></pre>
+<h2 id="code">Code</h2>
+<p>As in part 3, let’s say we’re building a game, and we have a Model that has both UIState and GameState.</p>
+<pre><code>-- UIState and GameState can be any types. We won't need to look
+-- inside them for the example.
+type UIState = ...
+type GameState = ...
+
+-- Our Model type will be a composite of the two:
+data Model = {
+    _uiState :: UIState,
+    _gameState :: GameState
+}</code></pre>
+<p>And the raw input we get is either key presses or clicks or frame ticks.</p>
+<pre><code>data Input = KeyDown Key
+           | KeyUp Key
+           | Click Point
+           | Tick Double</code></pre>
+<p>So ultimately we’re going to have an update function of type <em>Model -&gt; Input -&gt; Model</em>. In order to talk about these update functions at a higher level, let’s give them a name.</p>
+<pre><code>-- 's' for 'State'
+-- 'i' for 'Input'
+type Layer s i = s -&gt; i -&gt; s</code></pre>
+<p>So our update function would look like this:</p>
+<pre><code>-- This says update is a function that takes a Model and an Input
+-- and returns a new Model
+update :: Layer Model Input</code></pre>
+<p>And there’s some view function that produces HTML or 3D rendering commands, but we won’t go into that.</p>
+<pre><code>view :: Model -&gt; 3DRenderingCommands</code></pre>
+<p>To update our state with a list of inputs, we can just fold our update function over the list.</p>
+<pre><code>-- foldl' is like 'reduce' or 'inject' in other languages
+foldl' update model listOfInputs</code></pre>
+<h2 id="simple-composition-1">Simple Composition</h2>
+<p>Our model contains two differents states: UIState and GameState. If we assume for a second that each has an update function, we need a binary operator to combine them sequentially:</p>
+<pre><code>(*.*) :: Layer s i -&gt; Layer s i -&gt; Layer s i
+l1 *.* l2 = \s i -&gt; l1 (l2 s i) i</code></pre>
+<p>So, for the example model, if we want both to receive the raw inputs:</p>
+<pre><code>updateUI :: Layer Model Input
+updateUI model (Tick delta) = ... -- Animate all the things
+
+updateGame :: Layer Model Input
+updateGame model (Tick delta) = ... -- Move the enemies around
+
+update = updateUI *.* updateGame</code></pre>
+<p>Notice how all three layers have the same type. They are all update functions that produce a new Model given an Input.</p>
+<h2 id="scoping-updates-1">Scoping Updates</h2>
+<p>We would rather define our <em>updateGame</em> function in a way that completely isolates it from the UI state. In other words, we want its type to be <em>Layer GameState Input</em>. We can build a combinator for that using <a href="http://www.haskellforall.com/2013/05/program-imperatively-using-haskell.html">lenses</a>.</p>
+<pre><code>liftState :: Lens' s s' -&gt; Layer s' i -&gt; Layer s i
+liftState l nextLayer s i = s &amp; l %~ (`nextLayer` i)</code></pre>
+<p>‘liftState’ transforms a layer that operates over some state s into a layer that operates over some portion of s, specified by the lens. Assuming we have lenses <em>uiState</em> and <em>gameState</em> that focus on parts of our <em>Model</em> record, our example can become:</p>
+<pre><code>updateUI :: Layer UIState Input
+updateUI uistate (Tick delta) = ...
+
+updateGame :: Layer GameState Input
+updateGame gamestate (Tick delta) = ...
+
+update = liftState uiState updateUI *.* liftState gameState updateGame</code></pre>
+<p>To my eye, the individual update functions become simpler, while the main update function carries a little more complexity. This is great! A nasty problem in interactive applications is burying complexity deep into the logic of the program, which causes very subtle bugs. By bringing complexity toward the top level, the lower levels can focus on their individual concerns. This will be a common theme here as we progress.</p>
+<h2 id="changing-inputs-1">Changing Inputs</h2>
+<p>Now we’ll look at changing our input types so that our layers can be even more domain specific. We want the <em>updateGame</em> layer to only take in inputs that are agnostic to the actual controls used. Here’s the combinator we need:</p>
+<pre><code>liftInput :: (i -&gt; [j]) -&gt; Layer s j -&gt; Layer s i
+liftInput inputmap layer = \s i -&gt; foldl' layer s (inputmap i)</code></pre>
+<p>One input at the top layer might generate multiple inputs at the lower layer (or zero), so I have the input mapping function return a list.</p>
+<pre><code>data GameInput = GameTick Double
+               | PlayerJump
+
+updateGame :: Layer GameState GameInput
+updateGame gamestate input = case input of
+    GameTick delta -&gt; ...
+    PlayerJump -&gt; ...
+
+playerControls :: Input -&gt; GameInput
+playerControls input = case input of
+    Tick delta -&gt; [GameTick delta]
+    KeyDown SpaceBar -&gt; [PlayerJump]
+    _ -&gt; []
+
+update = liftState _1 updateUI *.* liftState _2 (liftInput playerControls updateGame)</code></pre>
+<p>The <em>updateGame</em> function is now only concerned with types relating to the game itself. It doesn’t know about the UI at all!</p>
+<h2 id="conditionals-1">Conditionals</h2>
+<p>Let’s add a pause menu to the game. First of all, we need to disable the game layer when we are paused. <em>when</em> is the combinator for that.</p>
+<pre><code>when :: (s -&gt; Bool) -&gt; Layer s i -&gt; Layer s i
+when pred layer s i = if pred s then layer s i else s</code></pre>
+<p><em>when</em> takes in a predicate on the state to determine whether to run the layer its given. If the predicate returns false, then we just throw out the layer’s result and use the old state.</p>
+<p>To use this in our update function, first we need to add a <em>paused</em> boolean to our Model.</p>
+<pre><code>data Model = {
+    _uiState :: UIState,
+    _gameState :: GameState,
+    _paused :: Bool
+}</code></pre>
+<p>And now our update function becomes:</p>
+<pre><code>-- Split into multiple lines for readability
+update = liftState uiState updateUI *.*
+         when (not . _paused)
+              (liftState gameState (liftInput playerControls updateGame)) *.*
+         liftState paused (\isPaused (KeyDown KeyP) -&gt; not isPaused)</code></pre>
+<p>Note that the example pattern matches on <em>KeyDown KeyP</em> and implicitly ignores any other input. In a real haskell program, you would need to add a catchall handler for the other cases to avoid a runtime error.</p>
+<h2 id="interactive-ui-1">Interactive UI</h2>
+<p>Now, let’s get to the same level as React/Flux and implement a full interaction between UI and Game. So let’s build out our pause menu with actual menu items.</p>
+<p>Instead of just a “pause” boolean, as in the previous example, let’s have a <em>MenuState</em> type, which is a pair of a pause boolean and a selected submenu.</p>
+<pre><code>type MenuState = (Bool, MenuScreen)
+
+data MenuScreen = MainMenu | Options
+
+data Model = {
+    _uiState :: UIState,
+    _gameState :: GameState,
+    _menuState :: MenuState
+}</code></pre>
+<p>Now, which menu items are available to be clicked on at any one time? That depends on the current menu state. So we need a combinator that gives us access to the current state.</p>
+<pre><code>dynamic :: (s -&gt; Layer s i) -&gt; Layer s i
+dynamic layerf = \s i -&gt; (layerf s) s i</code></pre>
+<p>What actions could the menu actually generate? We need a type for that.</p>
+<pre><code>data MenuAction = NewGame
+                | Resume
+                | ChangeScreen MenuScreen</code></pre>
+<p>Now we define the submenus and what items are in each submenu.</p>
+<pre><code>-- Each sub menu has a list of items, which are the actions
+menuItems :: MenuState -&gt; ([MenuAction])
+menuItems menuState = case snd menuState of
+    MainMenu -&gt; [NewGame, ChangeScreen Options, Resume]
+    Options -&gt; [ChangeScreen MainMenu,
+                    ...]</code></pre>
+<p>Now we need a layer to handle the menu. It will operate over <em>MenuAction</em>’s instead of raw inputs. So the type will be:</p>
+<pre><code>menuLayer :: Layer Model MenuAction -&gt; Layer Model Input</code></pre>
+<p>So we’re going to lift our raw input into a MenuAction using the current MenuState. Then once we have a MenuAction, we’ll apply it to both the MenuState and the GameState.</p>
+<p>The code will look a bit complex, but that’s just because I threw in some example logic for matching up a click location with a particular menu item:</p>
+<pre><code>menuLayer = dynamic $ \(_,_,menuState) -&gt; liftInput (menuAction menuState) menuClickLayer
+    where menuAction menuState (Click (x,y)) =
+                let items = menuItems menuState -- get the currently active menu items
+                    -- find which item is hit by our click
+                    index = find (\i -&gt; abs (i * 30 - y) &lt; 15) [0..(length items - 1)]
+                    in [items !! index]
+          menuClickLayer model menuItem =
+                liftState menuState updateMenu *.*
+                liftState gameState updateGameWithMenuAction
+
+updateMenu :: MenuState -&gt; MenuAction -&gt; MenuState
+updateMenu menuState menuAction = case menuAction of
+    NewGame -&gt; (False, MainMenu)
+    ChangeScreen x -&gt; (True, x)
+    Resume -&gt; (False, MainMenu)
+
+updateGameWithMenuAction :: GameState -&gt; MenuAction -&gt; GameState
+updateGameWithMenuAction _ NewGame = ...</code></pre>
+<p>And now here’s our new update function:</p>
+<pre><code>update = liftState uiState updateUI *.*
+         menuLayer *.*
+         when (not . fst . _menuState)
+              (liftState gameState (liftInput playerControls updateGame))</code></pre>
+<p>Again, you can see that the complex interactions between the different areas are all near the top level and separated from the handlers which are domain specific.</p>
+<h2 id="some-final-words">Some Final Words</h2>
+<p>In my own project I’ve found a particular kind of ‘widget’ useful. It’s essentially a surface with objects on it that you can tap and drag around. You can use it to direct the characters in your game, or implement a level editor, or really anything where you can select and drag things around. So this ‘surface’ is really a function that lifts raw input (clicks) and turns it into higher level domain specific input (taps, selections, and drags). And then you can implement your application logic in terms of selections and drags without having to worry about the raw click input. So basically you can create high level reusable pieces out of this machinery that makes it easy to add new features.</p>
+<p>To me, that is the real power, even over something like React. React/Flux only offers you two layers to work in. By composing update functions, you can use as many layers as you want. And each can use their own domain specific state and input.</p>
+<p>Now if you want to play around with this stuff, be my guest and check out the code!</p>
+<p>https://github.com/asivitz/layer</p>
+    </section>
+</article>
+
+        </div>
+      </section>
+      <footer>Copyright Axis Sivitz 2013-2020<footer>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+    <title></title>
+    <meta name="description" content />
+    <meta name="viewport" content="width=device-width" />
+
+    <!-- Place favicon.ico and apple-touch-icon.png in the root directory-->
+    <link rel="shortcut icon" href="../favicon.ico" />
+
+    <script src="http://code.jquery.com/jquery-2.1.0.min.js"></script>
+
+    <!--
+    if head
+        - var path = current.path.join("/") + "_head"
+        != partial(path, null)
+        -->
+    <link rel="stylesheet" href="../css/normalize.css" />
+    <link rel="stylesheet" href="../css/main.css" />
+    <link rel="stylesheet" href="../css/style.css" />
+    <link rel="stylesheet" href="../css/longform.css" />
+
+    
+
+    <script src="../js/vendor/modernizr-2.6.2.min.js"></script>
+    <script type="text/javascript" , src="//use.typekit.net/ovr5ukj.js"></script>
+    <script type="text/javascript">
+        try{Typekit.load();}catch(e){}
+    </script>
+  </head>
+  <body>
+    <div id="wrapper">
+      <header>
+        <div>
+          <a href="../">Main</a>
+        </div>
+      </header>
+      <section id="main">
+        <div class="contentwrapper">
+          <article>
+    <section class="header">
+        Posted on 2/18/13
+        
+    </section>
+    <section>
+        <ol start="16" type="a">
+<li>Someone recently convinced me to look at <a href="http://www.heyzap.com">Heyzap</a> as an alternative to <a href="http://www.apple.com/game-center/">Game Center</a> for iOS metagame stuff (Leaderboards, Achievements, etc..) I came up with the following pro/con list (specifically for Button Brigade):</li>
+</ol>
+<p>if preview a(href=link) Read More else</p>
+<p>p h1 Game Center ul li Built into iOS. User has nothing to install li(class=“alt-list-item”) Can cause my game to crash (yikes!) li(class=“alt-list-item”) Has a bug related to viewing the proper leaderboard li(class=“alt-list-item”) Limited number of leaderboards. Since I can’t do leaderboards for all levels, I decided to only pick 5 total. li(class=“alt-list-item”) Once a leaderboard / achievement has gone live, it is set forever li(class=“alt-list-item”) Interface is pretty ugly</p>
+<pre><code>  h1 Heyzap
+  ul
+     li (Basically) unlimited leaderboards. I can have a separate board for every level now
+     li The company seems flexible and willing to reset scores (although there isn't an automated way to do this yet, it is supposedly coming soon)
+     li In my limited experience playing with it, it seems faster than Game Center
+     li(class=&quot;alt-list-item&quot;) User has to install the (free) Heyzap app
+     li(class=&quot;alt-list-item&quot;) To view leaderboards, the SDK switches you over to the to the app, instead of opening a dialogue box
+     li(class=&quot;alt-list-item&quot;) The app isn't universal (only sized for iphone)</code></pre>
+<ol start="16" type="a">
+<li><p>The decision to switch seems like a no-brainer. The barrier to entry for a user seems a little higher with Heyzap, but in my experience many people don’t seem to log into Game Center anyway if it’s not a core part of the game. I’d rather give a superior experience to the users that really want leaderboards and achievements.</p></li>
+<li><p>Although Game Center is a first party service, Apple doesn’t seem to give it the TLC it deserves. There’s a good article written on this: <a href="http://www.imore.com/no-skin-game-center">No skin in the Game Center</a>. To be fair, I haven’t yet deployed with Heyzap, so it’s possible I’ll find bugs there as well. But so far it seems to treat developers (and users!) with a bit more respect. It seems much much easier to convince Heyzap to fix a bug than to get Apple to do…anything at all.</p></li>
+<li><p>I also haven’t researched any other services, so if you have your own favorite, shoot me an e-mail/tweet.</p></li>
+</ol>
+    </section>
+</article>
+
+        </div>
+      </section>
+      <footer>Copyright Axis Sivitz 2013-2020<footer>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+    <title></title>
+    <meta name="description" content />
+    <meta name="viewport" content="width=device-width" />
+
+    <!-- Place favicon.ico and apple-touch-icon.png in the root directory-->
+    <link rel="shortcut icon" href="../favicon.ico" />
+
+    <script src="http://code.jquery.com/jquery-2.1.0.min.js"></script>
+
+    <!--
+    if head
+        - var path = current.path.join("/") + "_head"
+        != partial(path, null)
+        -->
+    <link rel="stylesheet" href="../css/normalize.css" />
+    <link rel="stylesheet" href="../css/main.css" />
+    <link rel="stylesheet" href="../css/style.css" />
+    <link rel="stylesheet" href="../css/longform.css" />
+
+    
+
+    <script src="../js/vendor/modernizr-2.6.2.min.js"></script>
+    <script type="text/javascript" , src="//use.typekit.net/ovr5ukj.js"></script>
+    <script type="text/javascript">
+        try{Typekit.load();}catch(e){}
+    </script>
+  </head>
+  <body>
+    <div id="wrapper">
+      <header>
+        <div>
+          <a href="../">Main</a>
+        </div>
+      </header>
+      <section id="main">
+        <div class="contentwrapper">
+          <article>
+    <section class="header">
+        Posted on 10/21/14
+        
+    </section>
+    <section>
+        <p>p I just came across a programming problem that I think shows perfectly what working with Haskell is like.</p>
+<p>p Here’s the actual function I’m working on (from the <a href="https://github.com/asivitz/Hickory">Hickory</a> game engine):</p>
+<p>pre. processInput :: RenderInfo -&gt; InputEvent -&gt; Model -&gt; (Model, [InputEvent])</p>
+<pre><code>processInput renderinfo (RawEvent (InputTouchesUp touchInfos)) model =
+        let accum (m, oes) touchInfo = let (m', oes') = touchUp renderinfo touchInfo m
+                                            in (m', oes ++ oes')
+            in foldl accum (model,[]) touchInfos
+
+processInput renderinfo (RawEvent (InputTouchesDown touchInfos)) model =
+        let accum (m, oes) touchInfo = let (m', oes') = touchDown renderinfo touchInfo m
+                                            in (m', oes ++ oes')
+            in foldl accum (model,[]) touchInfos</code></pre>
+<p>p So processInput take some info, an event, and the model, and it gives back an updated version of the model, along with some number of new events to be processed on the next frame. There are a few different implementations for processInput– one pattern matches on InputTouchesUp and calls touchUp, and one pattern matches on InputTouchesDown and calls touchDown.</p>
+<p>pre. touchUp :: RenderInfo -&gt; TouchUpInfo -&gt; Model -&gt; (Model, [InputEvent]) touchDown :: RenderInfo -&gt; TouchDownInfo -&gt; Model -&gt; (Model, [InputEvent])</p>
+<p>p To handle events like InputTouchesUp, I want to use my touchUp function on each individual touch (think multi-touch on a smart phone).</p>
+<p>p I need to fold here instead of map, because each touchUp manipulates the model, and I need to accumulate those effects.</p>
+<p>p Now, without going into the details of the function, the main thing is that I end up having the same code in two places, so obviously I can refactor that.</p>
+<p>p Let’s put this in its own function to start with.</p>
+<p>pre. accumModelEffects :: Model -&gt; [touchInfo] -&gt; (RenderInfo -&gt; touchInfo -&gt; Model -&gt; (Model, [InputEvent]) -&gt; RenderInfo -&gt; (Model, [InputEvent])</p>
+<pre><code>accumModelEffects model touchInfos f renderinfo =
+        let accum (m, oes) touchInfo = let (m', oes') = f renderinfo touchInfo m
+                                            in (m', oes ++ oes')
+            in foldl accum (model,[]) touchInfos
+
+processInput :: RenderInfo -&gt; InputEvent -&gt; Model -&gt; (Model, [InputEvent])
+processInput renderinfo (RawEvent (InputTouchesUp touchInfos)) model =
+        accumModelEffects model touchInfos touchUp renderinfo
+
+processInput renderinfo (RawEvent (InputTouchesDown touchInfos)) model =
+        accumModelEffects model touchInfos touchDown renderinfo</code></pre>
+<p>p f is now the name of the touch effect function, which we pass in as a parameter.</p>
+<p>p touchInfo is a type variable (it starts with a lowercase letter), because it needs to work for either TouchUpInfo or TouchDownInfo.</p>
+<p>p In most languages, I think the accepted practice is to stop here. Afterall, we eliminated the duplicate code. What more could we want?</p>
+<p>p In Haskell, we want the TRUTH! What IS this function? Is it a general pattern? Will it ever be used again?</p>
+<p>P And a question I find even more fascinating: Has anyone ever written this before? And, is there already a name for it? Let’s find out!</p>
+<p>p We’ll start by combining two of our parameters, f and renderinfo. We can combine them because they are only used together. renderinfo is always the first argument of f, so let’s just pass them in already combined. Note that in Haskell, we don’t have to provide all the arguments to a function at the same time. This process is called <a href="http://www.haskell.org/haskellwiki/Currying">Currying</a>, and is named after, you guessed it, Haskell Curry!</p>
+<p>pre. accumModelEffects :: Model -&gt; [touchInfo] -&gt; (touchInfo -&gt; Model -&gt; (Model, [InputEvent]) -&gt; (Model, [InputEvent])</p>
+<pre><code>accumModelEffects model touchInfos f =
+        let accum (m, oes) touchInfo = let (m', oes') = f touchInfo m
+                                            in (m', oes ++ oes')
+            in foldl accum (model,[]) touchInfos
+
+processInput :: RenderInfo -&gt; InputEvent -&gt; Model -&gt; (Model, [InputEvent])
+processInput renderinfo (RawEvent (InputTouchesUp touchInfos)) model =
+        accumModelEffects model touchInfos (touchUp renderinfo)
+
+processInput renderinfo (RawEvent (InputTouchesDown touchInfos)) model =
+        accumModelEffects model touchInfos (touchDown renderinfo)</code></pre>
+<p>p Now let’s generalize that type signature. This function is just manipulating things. They don’t need to be Models or InputEvents. We never actually use functions inside of here that require knowledge of what those things actually are! So we can use type variables instead. This will let us use this function for many purposes instead of just this one, but will also let us discover if anyone else has written this function before.</p>
+<p>p We’ll also generalize our variable names, because they now represent abstract types.</p>
+<p>pre. accumModelEffects :: a -&gt; [x] -&gt; (x -&gt; a -&gt; (a, [b]) -&gt; (a, [b]) accumModelEffects starta xs f = let accum (a, bs) x = let (a’, bs’) = f x a in (a’, bs ++ bs’) in foldl accum (starta,[]) xs</p>
+<p>p So, what is this function actually doing? It applies f to each x in xs, while also accumulating effects on starta.</p>
+<p>p A better name eludes me, but let’s see if someone has already written this function. We’ll use <a href="http://www.haskell.org/hoogle/">Hoogle</a>, which is a Haskell API search engine. We can search for that specific type signature to see if a similar function already exists.</p>
+<p>p <a href="http://www.haskell.org/hoogle/?hoogle=a+-%3E+%5Bx%5D+-%3E+%28x+-%3E+a+-%3E+%28a%2C+%5Bb%5D%29%29+-%3E+%28a%2C+%5Bb%5D%29">Here’s the search.</a></p>
+<p>p No identical matches, but the first result is something called gmapAccumA, which seems close to what we want except that it’s specialized over the Data and Applicative typeclasses. That name reminds me though– there’s a function in Data.List called <a href="http://hackage.haskell.org/package/base-4.7.0.1/docs/Data-List.html#v:mapAccumL">mapAccumL</a> with a similar name. Here’s what it looks like:</p>
+<p>pre. mapAccumL :: (acc -&gt; x -&gt; (acc, y)) -&gt; acc -&gt; [x] -&gt; (acc, [y])</p>
+<pre><code>The mapAccumL function behaves like a combination of map and foldl; it applies a function to each element of a list, passing an accumulating parameter from left to right, and returning a final value of this accumulator together with the new list.</code></pre>
+<p>p There’s a definite similarity! The order of the parameters is a bit different, but other than that, the only difference is that the applied function returns a single thing instead of a list of things– (acc, y) instead of (a, [b]). That’s not a big difference though. In our function we use (++) to concatenate the lists of b’s into one list of b’s, but we could just as well do that outside of the function. Let’s refactor to use mapAccumL.</p>
+<p>pre. mapAccumLConcat starta xs f = let (a’, xs’) = mapAccumL f starta xs in (a’, concat xs’)</p>
+<p>p Now it’s starting to look like TRUTH! We got to use a standard library function, and we learned something also. Next time a similar situation comes up, we know to reach for mapAccumL right away! Note: We do need to flip the last two parameters of our touchUp and touchDown functions because of the way mapAccumL expects its accumulator function to work. But if we don’t want to do that we could use a lambda or the ‘flip’ function.</p>
+<p>p We <i>can</i> simplify a little further. All our function does now is run mapAccumL and then map the concat function over the second element in the resulting tuple. It would be nice to have this function:</p>
+<p>pre. (a -&gt; b) -&gt; (c, a) -&gt; (c, b)</p>
+<p>p Back again to <a href="http://www.haskell.org/hoogle/?hoogle=%28a+-%3E+b%29+-%3E+%28c%2C+a%29+-%3E+%28c%2C+b%29">Hoogle</a>, we find mapSnd, but it’s in some non-standard package. Ah well, it’s easy enough to write ourselves.</p>
+<p>pre. mapSnd :: (a -&gt; b) -&gt; (c, a) -&gt; (c, b) mapSnd f (c,a) = (c, f a)</p>
+<pre><code>mapAccumLConcat a xs f = mapSnd concat $ mapAccumL f a xs</code></pre>
+<p>p Now THAT is some good truth. It’s so skinny it almost seems not worth it to even have the function! We can just use “mapSnd concat $ mapAccumL” if we like.</p>
+<p>p em Note: It was pointed out to me that the function “second” is available from Control.Arrow to use instead of mapSnd. However, it is a bit harder to find it using Hoogle and following the types.</p>
+<p>p To me, the power of functional programming is that you can learn about the programs you write. You can learn about what abstractions you’re using, even if you didn’t realize you were using them at first! This makes you a better programmer. Next time, you can write that complicated logic in one line of code.</p>
+    </section>
+</article>
+
+        </div>
+      </section>
+      <footer>Copyright Axis Sivitz 2013-2020<footer>
+    </div>
+  </body>
+</html>

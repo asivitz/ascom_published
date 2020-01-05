@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+    <title></title>
+    <meta name="description" content />
+    <meta name="viewport" content="width=device-width" />
+
+    <!-- Place favicon.ico and apple-touch-icon.png in the root directory-->
+    <link rel="shortcut icon" href="../favicon.ico" />
+
+    <script src="http://code.jquery.com/jquery-2.1.0.min.js"></script>
+
+    <!--
+    if head
+        - var path = current.path.join("/") + "_head"
+        != partial(path, null)
+        -->
+    <link rel="stylesheet" href="../css/normalize.css" />
+    <link rel="stylesheet" href="../css/main.css" />
+    <link rel="stylesheet" href="../css/style.css" />
+    <link rel="stylesheet" href="../css/longform.css" />
+
+    
+
+    <script src="../js/vendor/modernizr-2.6.2.min.js"></script>
+    <script type="text/javascript" , src="//use.typekit.net/ovr5ukj.js"></script>
+    <script type="text/javascript">
+        try{Typekit.load();}catch(e){}
+    </script>
+  </head>
+  <body>
+    <div id="wrapper">
+      <header>
+        <div>
+          <a href="../">Main</a>
+        </div>
+      </header>
+      <section id="main">
+        <div class="contentwrapper">
+          <article>
+    <section class="header">
+        Posted on 11/6/14
+        
+    </section>
+    <section>
+        <p>For the past few months I’ve been working on a game library for Haskell. I call it <a href="https://github.com/asivitz/Hickory">Hickory</a>.</p>
+<p>It provides… - OpenGL rendering capabilities for both desktop (through GLFW) and iOS - A primary abstraction (the ‘Scene’) that connects resource loading, game logic, rendering, and input/event processing. - Texture loading - Font loading and text rendering - Abstractions for things like menus, GUI elements, multi-touch panning/zooming, entity/component systems, and more.</p>
+<h2 id="goals-for-hickory">Goals for Hickory</h2>
+<h3 id="straightforward">Straightforward</h3>
+<p>Hickory should provide functions for all common game functionality. ### Industrial Strength Performance isn’t the primary focus, but Hickory should be a viable way to make professional quality games. ### Flexible I hesitate to call Hickory an “engine”, because generally engines are inflexible beasts. Hickory, on the other hand, is a toolbox. You can use one tool without getting tied to the rest. Eventually, many parts of Hickory will become separate libraries.</p>
+<h2 id="lets-make-a-game-with-hickory">Let’s make a game with Hickory</h2>
+<p>This tutorial will provide an overview of many aspects of Hickory. We’ll make a simple top-down style shooter.</p>
+<p><img src="../img/blog/hickory-demo.gif" /></p>
+<h3 id="installing-hickory">Installing Hickory</h3>
+<pre><code>$ git clone https://github.com/asivitz/Hickory.git
+$ cd Hickory/
+$ cabal install
+$ cd GLFW
+$ cabal install
+$ cd ..</code></pre>
+<h3 id="up-and-running">Up and Running</h3>
+<p>We’ll start by laying down some stub functions and datatypes for our Scene. A Scene ties together our game state, a pure stepping function to transform the game state each frame, a rendering function, and an input queue. The input queue provides a way to process key presses, mouse clicks, or even custom events from other scenes.</p>
+<p>First, some imports.</p>
+<pre><code> import Engine.Scene.Scene
+ import Engine.Scene.Input
+ import Types.Types
+ import Math.Matrix
+ import Graphics.Drawing
+ import Platforms.GLFW</code></pre>
+<p>Next, we’ll declare a few simple datatypes.</p>
+<pre><code>data Model = EmptyModel -- Represents our game state
+
+type Event = RawInput -- Represents our game events</code></pre>
+<p>The Model type represents our entire game state. Right now it is empty, but eventually it will contain the player and missile positions.</p>
+<p>The Event type determines both what sort of events our Scene will process, as well as what sort of events it can produce. In this case, we use RawInput, which Hickory provides as an interface for keyboard and mouse/touch input, which is all we’ll need for this game. However, it is possible to use a more complex event type that can support menu selections, for example.</p>
+<p>Before we can render our scene, we may need to load some resources (shaders, textures, etc.) We’ll keep it simple for now.</p>
+<pre><code>data Resources = EmptyResources
+
+loadResources :: IO (Resources)
+loadResources = return EmptyResources</code></pre>
+<p>That loaded Resources structure will get passed into our render function, which will do nothing for now.</p>
+<pre><code>render :: Resources -&gt; RenderInfo -&gt; Model -&gt; IO ()
+render resources renderinfo model = return ()</code></pre>
+<p>We also need to generate a view matrix. This is used by OpenGL to render our scene. We’ll start by just returning the identity matrix.</p>
+<pre><code>calcCameraMatrix :: Size Int -&gt; Model -&gt; Mat44
+calcCameraMatrix (Size w h) model = mat44Identity</code></pre>
+<p>Our step function will contain our actual game logic. It takes the current game model and transforms it based on the event stream and the elapsed time since the previous frame. The RenderInfo from the previous frame is also included so that you can do things like unproject a mouse click into world coordinates.</p>
+<pre><code>stepModel :: RenderInfo -&gt; [Event] -&gt; Double -&gt; Model -&gt; (Model, [Event])
+stepModel renderinfo inputEvents delta model =
+      (model, [])</code></pre>
+<p>We return a tuple (model, []) because we can also pass events on to another scene, or to the same scene on the next frame. We don’t have any such events right now so we just have an empty list. And, our game doesn’t do anything yet so we return the model unchanged.</p>
+<p>We then collect these functions in a Scene, and connect them by creating a SceneOperator. The SceneOperator manages the model state and the input queue, which we need to persist through each game loop.</p>
+<pre><code>makeScene :: IO (SceneOperator Event)
+makeScene = makeSceneOperator EmptyModel -- The starting state of our game model
+                              stepModel -- Our game logic step function
+                              loadResources -- Our resource loading function
+                              calcCameraMatrix -- A function that calculates
+                                               -- our scene's view matrix
+                              render -- Our Rendering function
+                              worldLayer -- A layer to draw in</code></pre>
+<p>Currently there are only a few choices of layer available (worldLayer for your game, and uiLayer for your UI overlay), but that will change.</p>
+<p>Finally, we run our scene in the GLFW game loop.</p>
+<pre><code>main :: IO ()
+main = do
+  operator &lt;- makeScene
+
+  glfwMain &quot;Demo&quot; -- Window title
+      (Size 480 640) -- Window size
+      [operator] -- List of scene operators
+      (_addEvent operator) -- The function used to process GLFW's input events</code></pre>
+<p>This code is typed up in <a href="https://github.com/asivitz/Hickory/blob/master/Example/Shooter/shooter1.hs">Example/Shooter/shooter1.hs</a>. Let’s run it!</p>
+<pre><code>$ cd Example/Shooter/
+$ ghc shooter1.hs
+$ ./shooter1</code></pre>
+<p>You should see a wonderfully blank window.</p>
+<h3 id="adding-our-player">Adding our Player</h3>
+<p>We’ll need a few more imports.</p>
+<pre><code>import Math.Vector
+import Graphics.DrawUtils
+import Graphics.Shader
+import Camera.Camera
+import Types.Color
+import qualified Data.HashMap.Strict as HashMap</code></pre>
+<p>We’ll add a player that we can move around with the arrow keys. The player will be drawn as a white square.</p>
+<p>First we need to add the player data to our model. We’ll represent our player as a single 2D position.</p>
+<pre><code>data Model = Model {
+    playerPos :: V2
+    }</code></pre>
+<p>A new game will start with the player at position (0,0)</p>
+<pre><code>newGame :: Model
+newGame = Model vZero -- vZero is equivalent to (v2 0 0)</code></pre>
+<p>Now we need to process our input events. The only one we care about right now is InputKeysHeld (so we can move our player). We will take that event, run through all the held keys and look for arrow keys, and use them to construct a movement vector.</p>
+<pre><code>data GameInput = GameInput (Maybe V2)
+
+buildVecWithKeys :: V2 -&gt; (Key, Double) -&gt; V2
+buildVecWithKeys vec (key, heldTime) =
+    vec + (case key of
+                Key'Up -&gt; v2 0 1
+                Key'Left -&gt; v2 (-1) 0
+                Key'Down -&gt; v2 0 (-1)
+                Key'Right -&gt; v2 1 0
+                _ -&gt; vZero)
+
+-- This function turns a raw event list into a movement vector our game logic can use
+collectInput :: [Event] -&gt; GameInput
+collectInput events = foldl process (GameInput Nothing) events
+    where process gameInput (InputKeysHeld hash) =
+            let movementVec = foldl buildVecWithKeys vZero (HashMap.toList hash)
+                in GameInput (Just movementVec)
+          process gameInput _ = gameInput</code></pre>
+<p>Now we can use that movement vector to move our player. Our net movement for this frame will be the requested movement vector scaled by the playerMovementSpeed multiplied by the time elapsed since the last frame (delta).</p>
+<pre><code>playerMovementSpeed = 100
+
+stepModel :: RenderInfo -&gt; [Event] -&gt; Double -&gt; Model -&gt; (Model, [Event])
+stepModel renderinfo events delta model@Model { playerPos = p} =
+        let (GameInput movementVec) = collectInput events
+            newPlayerPos = case movementVec of
+                Nothing -&gt; p
+                -- The |* operator multiplies a vector by a scalar
+                Just v -&gt; p + (v |* (delta * playerMovementSpeed))
+            in (model { playerPos = newPlayerPos }, [])</code></pre>
+<p>To draw our player we need to load a simple shader program. A shader program tells OpenGL how to draw something, and is written in a special language called <a href="http://en.wikipedia.org/wiki/Glsl">GLSL</a>. It is outside the scope of this tutorial to explain how to write them, but the Hickory project includes a few simple ones that cover many use cases, including drawing solid or textured rectangles (including sprites). For our player, we just need a solid color, so we’ll build a shader program out of a simple vertex shader (<a href="https://github.com/asivitz/Hickory/blob/master/Example/Shooter/resources/Shaders/Shader.vsh">Shader.vsh</a>), and a simple fragment shader (<a href="https://github.com/asivitz/Hickory/blob/master/Example/Shooter/resources/Shaders/SolidColor.fsh">SolidColor.fsh</a>). You probably only need to write your own shaders if you want specific visual effects.</p>
+<p>The Resources type now contains our solid shader. We’ll load the shader files from the resources path that we pass in.</p>
+<pre><code>data Resources = Resources {
+    solidShader :: Shader
+    }
+
+loadResources :: String -&gt; IO Resources
+loadResources path = do
+    solid &lt;- loadShader path &quot;Shader.vsh&quot; &quot;SolidColor.fsh&quot;
+    case solid of
+        Just sh -&gt; return $ Resources sh
+        Nothing -&gt; error &quot;Couldn't load resources.&quot;</code></pre>
+<p>Note that the loadShader function returns a (Maybe Shader), so we need to check if the load actually succeeded before storing it in Resources.</p>
+<p>Now we need a view matrix that can actually show something. In this case we’ll use an orthogonal projection whose width is equal to the window’s width, and is centered around (0,0). The depth will run from 1 to 100.</p>
+<pre><code>calcCameraMatrix :: Size Int -&gt; Model -&gt; Mat44
+calcCameraMatrix (Size w h) model =
+        let proj = Ortho (realToFrac w) 1 100 True
+            camera = Camera proj vZero
+            in cameraMatrix camera (aspectRatio (Size w h))</code></pre>
+<p>And now we can actually render the player. Again, the Resources type now contains a shader we can use.</p>
+<pre><code>render :: Resources -&gt; RenderInfo -&gt; Model -&gt; IO ()
+render Resources { solidShader = solid } (RenderInfo _ _ layer)  Model { playerPos = p } = do
+        drawSpec (v2tov3 p (-5)) layer (SolidSquare (Size 10 10) white solid)</code></pre>
+<p>The v2tov3 function turns our 2D position vector into a 3D vector suitable for rendering (by placing it at the Z-coordinate -5).</p>
+<p>It’s easier to understand the drawSpec function by looking at its type.</p>
+<pre><code>drawSpec :: Vector3 -&gt; Layer -&gt; DrawSpec -&gt; IO ()</code></pre>
+<p>And the DrawSpec type is declared like this:</p>
+<pre><code>data DrawSpec = Square FSize Color TexID Shader
+              | SolidSquare FSize Color Shader</code></pre>
+<p>And finally, we’ll need to pass in the proper resources path so we know where to load the shaders.</p>
+<pre><code>makeScene :: String -&gt; IO (SceneOperator Event)
+makeScene resPath = makeSceneOperator newGame
+                                      stepModel
+                                      (loadResources resPath)
+                                      calcCameraMatrix
+                                      render
+                                      worldLayer
+
+main :: IO ()
+main = do
+    operator &lt;- makeScene &quot;resources&quot;
+
+    glfwMain &quot;Demo&quot;
+             (Size 480 640)
+             [operator]
+             (_addEvent operator)</code></pre>
+<p>And make sure the shaders are actually there! (We only pass in the root “resources” path. The shader loading system will automatically look in the Shaders sub-directory.)</p>
+<pre><code>$ ls resources/Shaders
+Shader.fsh         Shader.vsh         SolidColor.fsh</code></pre>
+<p>This code is typed up in <a href="https://github.com/asivitz/Hickory/blob/master/Example/Shooter/shooter2.hs">Example/Shooter/shooter2.hs</a>. You can move the player around with the arrow keys.</p>
+<pre><code>$ ghc shooter2.hs
+$ ./shooter2</code></pre>
+<h3 id="fire-ze-missiles">Fire ze missiles!</h3>
+<p>Now we’ll give our player some fire power. We’ll adapt our game model to include a firing direction and a list of missile position and direction pairs. Our newGame model now includes a default firing direction of (1,0), which is to the right.</p>
+<pre><code>data Model = Model {
+           playerPos :: V2,
+           firingDirection :: V2,
+           missiles :: [(V2, V2)]
+           }
+
+newGame :: Model
+newGame = Model vZero (v2 1 0) []</code></pre>
+<p>We now need to collect space bar presses along with the arrow keys. We’ll add a didFire bool to our GameInput type to indicate whether we requested a shot.</p>
+<pre><code>data GameInput = GameInput {
+   movementVec :: (Maybe V2),
+   didFire :: Bool
+   }
+
+collectInput :: [Event] -&gt; GameInput
+collectInput events = foldl process (GameInput Nothing False) events
+    where process gameInput (InputKeysHeld hash) =
+            let moveVec = foldl buildVecWithKeys vZero (HashMap.toList hash)
+                in gameInput { movementVec = (Just moveVec) }
+          process gameInput (InputKeyDown Key'Space) =
+                gameInput { didFire = True }
+          process gameInput _ = gameInput</code></pre>
+<p>We need a speed for the missile flight, as well as a function to determine whether the missile should expire. Afterall, we don’t want missiles to fly on forever.</p>
+<pre><code>missileMovementSpeed = 200
+
+missileInBounds :: (V2, V2) -&gt; Bool
+missileInBounds (pos, _) = vmag pos &lt; 500</code></pre>
+<p>Our stepping function is now a little more interesting. We need to move our player as before, but also store that movement direction as the firing direction. And then if a new missile was requested, we’ll fire that in the firing direction. And finally we’ll move all the missiles.</p>
+<pre><code>stepModel :: RenderInfo - [Event] -&gt; Double -&gt; Model -&gt; (Model, [Event])
+stepModel renderinfo events delta Model { playerPos, firingDirection, missiles } =
+        let GameInput { movementVec, didFire } = collectInput events
+            (fireDir', playerPos') = case movementVec of
+                        -- If we didn't move, keep the old firing direction
+                        Nothing -&gt; (firingDirection, playerPos)
+
+                        -- If all the movement keys cancel out, keep
+                        -- the old firing direction
+                        Just v | vnull v -&gt; (firingDirection, playerPos)
+
+                        -- If we move, then the firingDirection should
+                        -- change as well
+                        Just v -&gt; (v, playerPos + (v |* (delta * playerMovementSpeed)))
+
+            -- Fire ze missiles!
+            missiles' = if didFire
+                            then ((playerPos', fireDir') : missiles)
+                            else missiles
+
+            -- and finally we move all of the missiles,
+            -- and remove the ones that went out of bounds
+            movedMissiles = filter missileInBounds $
+                map (\(pos, dir) -&gt; (pos + (dir |* (delta * missileMovementSpeed)), dir))
+                    missiles'
+
+            in (Model { playerPos = playerPos',
+                        firingDirection = fireDir',
+                        missiles = movedMissiles }, [])</code></pre>
+<p>We’ll draw our missiles using a simple circle texture, so we’ll need a shader that can handle textures, as well as the texture itself.</p>
+<p>First we’ll add the new shader and texture to the Resources datatype.</p>
+<pre><code>data Resources = Resources {
+        solidShader :: Shader,
+        texturedShader :: Shader,
+        missileTex :: TexID
+    }</code></pre>
+<p>And we’ll load them in our loadResources function. Just like loadShader, loadTexture may fail and return Nothing, so we need to check that before storing the texture in Resources. loadTexture will look in the “images” sub-directory inside the passed in resources directory.</p>
+<pre><code>loadResources :: String -&gt; IO Resources
+loadResources path = do
+        solid &lt;- loadShader path &quot;Shader.vsh&quot; &quot;SolidColor.fsh&quot;
+
+        -- To draw the missiles, we also need a shader that can draw
+        -- textures, and the actual missile texture
+        textured &lt;- loadShader path &quot;Shader.vsh&quot; &quot;Shader.fsh&quot;
+        missiletex &lt;- loadTexture path &quot;circle.png&quot;
+
+        case (solid, textured, missiletex) of
+            (Just solSh, Just texSh, Just missTex) -&gt;
+                return $ Resources solSh texSh missTex
+            _ -&gt; error &quot;Couldn't load resources.&quot;</code></pre>
+<p>Now all we need to do is draw our missiles. This is our new render function:</p>
+<pre><code>render :: Resources -&gt; RenderInfo -&gt; Model -&gt; IO ()
+render Resources { solidShader, texturedShader, missileTex } (RenderInfo _ _ layer)  Model { playerPos, missiles } = do
+    drawSpec (v2tov3 playerPos (-5))
+             layer
+             (SolidSquare (Size 10 10) white solidShader)
+
+    -- Draw the missiles
+    forM_ missiles $ \(pos, _) -&gt;
+        drawSpec (v2tov3 pos (-5))
+                 layer
+                 (Square (Size 5 5) (rgb 1 0 0) missileTex texturedShader)</code></pre>
+<p>And that’s a wrap! This version is typed up in <a href="https://github.com/asivitz/Hickory/blob/master/Example/Shooter/shooter3.hs">shooter3.hs</a>. Let’s make sure we have the right shader and texture files, then we’ll compile and run it!</p>
+<pre><code>$ ls resources/Shaders
+Shader.fsh         Shader.vsh         SolidColor.fsh
+$ ls resources/images
+circle.png
+$ ghc shooter3.hs
+$ ./shooter3</code></pre>
+<p>If you would like to see more tutorials, shoot me an e-mail or message me on twitter <a href="http://twitter.com/asivitz"><span class="citation" data-cites="asivitz">@asivitz</span></a>.</p>
+    </section>
+</article>
+
+        </div>
+      </section>
+      <footer>Copyright Axis Sivitz 2013-2020<footer>
+    </div>
+  </body>
+</html>
