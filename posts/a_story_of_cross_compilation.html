@@ -24,7 +24,6 @@
 
     
 
-    <script src="../js/vendor/modernizr-2.6.2.min.js"></script>
     <script type="text/javascript" , src="//use.typekit.net/ovr5ukj.js"></script>
     <script type="text/javascript">
         try{Typekit.load();}catch(e){}
@@ -57,7 +56,7 @@
 <p>p Here’s where a nifty trick comes in. I’ll let the documentation for hsc2hs speak for itself:</p>
 <p>pre. – Given a compile-time constant with boolean type, this extracts the – value of the constant by compiling a .c file only. – – The trick comes from autoconf: use the fact that the compiler must – perform constant arithmetic for computation of array dimensions, and – will generate an error if the array has negative size. runCompileBooleanTest :: ZCursor Token -&gt; String -&gt; TestMonad Bool</p>
 <p>p And then it tries to compile this sort of program:</p>
-<p>pre. &quot;void _hsc2hs_test() {&quot; ++ &quot; static int test_array[1 - 2 * !(&quot; ++ booleanTest ++ &quot;)];&quot; ++ &quot; test_array[0] = 0;&quot; ++ “}”</p>
+<p>pre. "void _hsc2hs_test() {" ++ " static int test_array[1 - 2 * !(" ++ booleanTest ++ ")];" ++ " test_array[0] = 0;" ++ “}”</p>
 <p>p booleanTest is some expression like ‘value &gt; 42’.</p>
 <p>p So we generate a small program that tries to create an array with a size that’s based in part on the value of a boolean expression, and we compile it. If the size is negative, the compiler will generate an error. Otherwise, it succeeds. Cool! We can figure out the truthiness of a value without ever running the program.</p>
 <p>p Let’s take that a step further. If we want to know value of some number, we can perform a binary search. So, test if it’s less than 2^32. If so, test if it’s less than 2^16. And continue narrowing it down until you’ve found it.</p>
